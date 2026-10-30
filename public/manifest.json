@@ -1,0 +1,130 @@
+{
+  "id": "/",
+  "name": "NEXORA HI — Rede Social de Nova Geração",
+  "short_name": "NEXORA HI",
+  "description": "Uma nova forma de te conectares. Publicações, clips verticais, stories interativos, mensagens encriptadas e comunidades globais.",
+  "start_url": "/",
+  "scope": "/",
+  "lang": "pt",
+  "dir": "ltr",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait-primary",
+  "background_color": "#030712",
+  "theme_color": "#2563eb",
+  "categories": [
+    "social",
+    "entertainment",
+    "news"
+  ],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "NEXORA Clips & Feed no Telemóvel"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "NEXORA Ecossistema Social"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Feed Principal",
+      "short_name": "Feed",
+      "description": "Aceder às publicações e debates mais recentes",
+      "url": "/?tab=feed",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "NEXORA Clips",
+      "short_name": "Clips",
+      "description": "Ver vídeos curtos verticais",
+      "url": "/?tab=clips",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Mensagens Diretas",
+      "short_name": "Chat",
+      "description": "Conversas privadas encriptadas",
+      "url": "/?tab=messages",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Explorar Tópicos",
+      "short_name": "Explorar",
+      "description": "Assuntos do momento e criadores",
+      "url": "/?tab=explore",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "share_target": {
+    "action": "/?action=share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "prefer_related_applications": false,
+  "related_applications": []
+}

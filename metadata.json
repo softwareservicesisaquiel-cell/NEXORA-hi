@@ -1,0 +1,6 @@
+{
+  "name": "Nexora — Rede Social de Nova Geração",
+  "description": "Uma nova forma de te conectares. O ecossistema social do futuro que combina publicações, clips verticais, stories interativos, mensagens diretas e oportunidades profissionais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
