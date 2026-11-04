@@ -2,26 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   X,
-  Globe2,
+  User,
   Shield,
-  Cpu,
-  Smartphone,
-  Bell,
-  Sliders,
-  Check,
-  RefreshCw,
-  Sparkles,
   Lock,
-  LogOut,
-  Laptop,
+  Eye,
+  EyeOff,
+  Bell,
+  Sun,
+  Moon,
+  Globe2,
+  Trash2,
+  KeyRound,
+  Copy,
+  Check,
   CheckCircle2,
+  Smartphone,
+  Laptop,
+  Tablet,
+  AlertTriangle,
   ChevronRight,
-  Flame,
-  Zap,
-  Download,
-  ExternalLink,
+  UserX,
+  Settings,
+  Image,
+  MapPin,
+  RefreshCw,
 } from 'lucide-react';
 import { WORLD_LANGUAGES } from '../i18n/languages';
+import { auth, updatePassword } from '../lib/firebase';
+import {
+  getActiveSessionsList,
+  terminateOtherSessionsList,
+  DeviceSessionInfo,
+} from '../utils/deviceDetector';
+import {
+  hasPermission,
+  revokePermission,
+  resetAllPermissions,
+} from '../utils/permissionManager';
+import { clearAllImageCache } from '../utils/imageCache';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -35,501 +53,805 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   onOpenLanguageSelector,
-  onOpenInstallationHub,
   currentLanguageCode,
 }) => {
-  const { addToast, logout } = useApp();
+  const {
+    currentUser,
+    updateProfile,
+    deleteAccount,
+    deactivateAccount,
+    logout,
+    theme,
+    toggleTheme,
+    blockedUserIds,
+    allUsers,
+    addToast,
+    t,
+  } = useApp();
 
-  const [activeSection, setActiveSection] = useState<'evolution' | 'security' | 'compatibility' | 'installation' | 'notifications'>('evolution');
+  const [activeCategory, setActiveCategory] = useState<'account' | 'privacy' | 'security' | 'appearance' | 'notifications'>('account');
 
-  // Autonomous update engine cycle (every 1 month and 15 days = 45 days)
-  const [daysRemaining, setDaysRemaining] = useState(38);
-  const [hoursRemaining, setHoursRemaining] = useState(14);
-  const [minutesRemaining, setMinutesRemaining] = useState(25);
-  const [secondsRemaining, setSecondsRemaining] = useState(40);
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [lastCheckMessage, setLastCheckMessage] = useState('O sistema está em sincronia contínua com as tendências globais.');
+  // Account form states
+  const [displayName, setDisplayName] = useState(currentUser?.name || '');
+  const [username, setUsername] = useState(currentUser?.username || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
 
-  // Settings states
-  const [biometricEnabled, setBiometricEnabled] = useState(true);
-  const [dataSaverMode, setDataSaverMode] = useState(true);
-  const [highFrameRate, setHighFrameRate] = useState(true);
-  const [pushNotifs, setPushNotifs] = useState(true);
-  const [quantumEncryption, setQuantumEncryption] = useState(true);
+  // Password change states
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Active sessions mock list
-  const [activeSessions, setActiveSessions] = useState([
-    {
-      id: 'sess_1',
-      device: 'Samsung Galaxy (Android 7+ / 14)',
-      location: 'Lisboa, Portugal',
-      ip: '194.65.120.45',
-      isCurrent: true,
-      lastActive: 'Ativo agora',
-    },
-    {
-      id: 'sess_2',
-      device: 'Google Chrome Desktop',
-      location: 'Porto, Portugal',
-      ip: '85.241.77.12',
-      isCurrent: false,
-      lastActive: 'Ontem às 22:40',
-    },
-  ]);
+  // Privacy states
+  const [isPrivate, setIsPrivate] = useState(currentUser?.isPrivate || false);
+  const [messagePrivacy, setMessagePrivacy] = useState<'everyone' | 'following'>('everyone');
+  const [commentPrivacy, setCommentPrivacy] = useState<'everyone' | 'following'>('everyone');
 
-  // Autonomous countdown effect
+  // Notification states
+  const [notifyLikes, setNotifyLikes] = useState(true);
+  const [notifyComments, setNotifyComments] = useState(true);
+  const [notifyMessages, setNotifyMessages] = useState(true);
+  const [notifyCalls, setNotifyCalls] = useState(true);
+
+  // Device sessions with exact hardware and OS detection
+  const [sessions, setSessions] = useState<DeviceSessionInfo[]>([]);
+  const [photosPermissionGranted, setPhotosPermissionGranted] = useState(hasPermission('photos'));
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(hasPermission('location'));
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsRemaining(prev => {
-        if (prev > 0) return prev - 1;
-        setMinutesRemaining(m => (m > 0 ? m - 1 : 59));
-        return 59;
+    if (isOpen) {
+      getActiveSessionsList().then((list) => {
+        setSessions(list);
       });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+      setPhotosPermissionGranted(hasPermission('photos'));
+      setLocationPermissionGranted(hasPermission('location'));
+    }
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentUser) return null;
 
-  const currentLangObj = WORLD_LANGUAGES.find(l => l.code === currentLanguageCode) || WORLD_LANGUAGES[0];
+  const currentLangObj = WORLD_LANGUAGES.find((l) => l.code === currentLanguageCode) || WORLD_LANGUAGES[0];
 
-  const handleManualCheckUpdate = () => {
-    setIsCheckingUpdate(true);
-    setTimeout(() => {
-      setIsCheckingUpdate(false);
-      setLastCheckMessage('Verificação concluída! O NEXORA HI descarregou 4 novos módulos de inteligência e filtros adaptativos sem reiniciar a app.');
-      addToast('Atualização autônoma aplicada com sucesso!', 'success');
-    }, 2000);
+  const handleCopyNexoraId = () => {
+    navigator.clipboard.writeText(currentUser.nexoraId);
+    setCopiedId(true);
+    addToast(`NEXORA ID ${currentUser.nexoraId} copiado!`, 'success');
+    setTimeout(() => setCopiedId(false), 2500);
   };
 
-  const handleTerminateOtherSessions = () => {
-    setActiveSessions(prev => prev.filter(s => s.isCurrent));
-    addToast('Todas as outras sessões foram encerradas com segurança!', 'success');
+  const handleSaveAccountInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    try {
+      await updateProfile({
+        name: displayName.trim() || currentUser.name,
+        username: username.trim().toLowerCase() || currentUser.username,
+      });
+      addToast('Informações de conta atualizadas com sucesso!', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Erro ao guardar dados.', 'error');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      addToast('A nova palavra-passe deve conter pelo menos 6 caracteres.', 'info');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      addToast('As palavras-passe não coincidem.', 'error');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      if (auth.currentUser) {
+        await updatePassword(auth.currentUser, newPassword);
+        addToast('Palavra-passe alterada com sucesso no Firebase Auth!', 'success');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      } else {
+        throw new Error('Sessão expirada. Inicie sessão novamente.');
+      }
+    } catch (err: any) {
+      addToast(err.message || 'Erro ao alterar palavra-passe.', 'error');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleTogglePrivacy = async (privateVal: boolean) => {
+    setIsPrivate(privateVal);
+    await updateProfile({ isPrivate: privateVal });
+    addToast(privateVal ? 'Conta alterada para Privada.' : 'Conta alterada para Pública.', 'success');
+  };
+
+  const handleTerminateOtherSessions = async () => {
+    const remaining = await terminateOtherSessionsList();
+    setSessions(remaining);
+    addToast('Todas as outras sessões foram encerradas com segurança.', 'success');
+  };
+
+  const handleRevokePhotos = () => {
+    revokePermission('photos');
+    setPhotosPermissionGranted(false);
+    addToast('Permissão de acesso a fotos revogada com sucesso.', 'info');
+  };
+
+  const handleRevokeLocation = () => {
+    revokePermission('location');
+    setLocationPermissionGranted(false);
+    addToast('Permissão de localização geográfica revogada.', 'info');
+  };
+
+  const handleResetPermissions = () => {
+    resetAllPermissions();
+    setPhotosPermissionGranted(false);
+    setLocationPermissionGranted(false);
+    addToast('Todas as permissões do dispositivo foram repostas.', 'info');
+  };
+
+  const handleClearCache = async () => {
+    await clearAllImageCache();
+    addToast('Cache de imagens do dispositivo limpa com sucesso!', 'success');
+  };
+
+  const handleDeactivate = async () => {
+    if (window.confirm('Tem a certeza que deseja desativar a sua conta NEXORA? Pode reativá-la a qualquer momento iniciando sessão.')) {
+      await deactivateAccount();
+      onClose();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm('ATENÇÃO: Deseja eliminar permanentemente a sua conta NEXORA? Esta ação é irreversível e removerá todos os seus dados.')) {
+      await deleteAccount();
+      onClose();
+    }
+  };
+
+  const blockedUsersList = allUsers.filter((u) => blockedUserIds.includes(u.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl flex flex-col max-h-[88vh] text-slate-900 dark:text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] overflow-hidden text-slate-900 dark:text-slate-100">
         
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Sliders className="w-5 h-5" />
+        {/* Left Category Sidebar */}
+        <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 p-3 sm:p-4 flex md:flex-col justify-between shrink-0">
+          <div>
+            <div className="flex items-center justify-between mb-4 px-2">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="font-bold text-base font-[var(--font-display)]">
+                  {t('menu.settings')}
+                </h3>
+              </div>
+              <button
+                onClick={onClose}
+                className="md:hidden p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <h3 className="font-bold text-base sm:text-lg font-[var(--font-display)]">
-                Definições do NEXORA HI
-              </h3>
-              <p className="text-xs text-slate-500">
-                Inteligência autônoma, segurança reforçada e configurações do sistema
-              </p>
-            </div>
+
+            <nav className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+              <button
+                onClick={() => setActiveCategory('account')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === 'account'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>Conta</span>
+              </button>
+
+              <button
+                onClick={() => setActiveCategory('privacy')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === 'privacy'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Lock className="w-4 h-4" />
+                <span>Privacidade</span>
+              </button>
+
+              <button
+                onClick={() => setActiveCategory('security')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === 'security'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>Segurança</span>
+              </button>
+
+              <button
+                onClick={() => setActiveCategory('appearance')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === 'appearance'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Sun className="w-4 h-4" />
+                <span>Aparência & Idioma</span>
+              </button>
+
+              <button
+                onClick={() => setActiveCategory('notifications')}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === 'notifications'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Bell className="w-4 h-4" />
+                <span>Notificações</span>
+              </button>
+            </nav>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="hidden md:block pt-4 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400">
+            NEXORA Cloud • Firebase Realtime
+          </div>
         </div>
 
-        {/* Section Navigation Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-2xl mb-5 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveSection('evolution')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap min-h-[38px] ${
-              activeSection === 'evolution'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5" />
-            <span>Evolução Autônoma (45d)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSection('security')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap min-h-[38px] ${
-              activeSection === 'security'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span>Segurança & Sessões</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSection('compatibility')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap min-h-[38px] ${
-              activeSection === 'compatibility'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Android 7+ & Desempenho</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSection('installation')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap min-h-[38px] ${
-              activeSection === 'installation'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Instalar & Baixar App</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSection('notifications')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all whitespace-nowrap min-h-[38px] ${
-              activeSection === 'notifications'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>Alertas</span>
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-4">
-          
-          {/* Quick Language Banner (always visible at top of body) */}
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Globe2 className="w-4 h-4 text-blue-500" />
-              <div>
-                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  Idioma Ativo: {currentLangObj.nativeName} ({currentLangObj.name})
-                </span>
-                <span className="text-[10px] text-slate-500 block">
-                  Mais de 180 idiomas mundiais disponíveis
-                </span>
-              </div>
-            </div>
-
+        {/* Right Content Area */}
+        <div className="flex-1 p-5 sm:p-6 overflow-y-auto space-y-6">
+          <div className="hidden md:flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <h4 className="font-bold text-sm uppercase tracking-wider text-slate-500">
+              {activeCategory === 'account' && 'Definições de Conta'}
+              {activeCategory === 'privacy' && 'Privacidade e Acesso'}
+              {activeCategory === 'security' && 'Segurança da Sessão'}
+              {activeCategory === 'appearance' && 'Aparência e Idioma Global'}
+              {activeCategory === 'notifications' && 'Preferências de Notificação'}
+            </h4>
             <button
-              onClick={onOpenLanguageSelector}
-              className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 text-blue-600 dark:text-blue-400 transition-colors flex items-center gap-1"
+              onClick={onClose}
+              className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <span>Alterar</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* 1. EVOLUÇÃO AUTÔNOMA SECTION */}
-          {activeSection === 'evolution' && (
-            <div className="space-y-4">
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-950/40 via-indigo-950/30 to-purple-950/40 border border-blue-500/30 shadow-inner">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <h4 className="font-bold text-sm text-white font-[var(--font-display)]">
-                      Ciclo de Atualização Autônoma (1 Mês e 15 Dias)
-                    </h4>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">
-                    45 DIAS
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-300 leading-relaxed mb-4">
-                  O motor inteligente do NEXORA HI analisa as mudanças no mundo a cada segundo e recompila autonomamente novos recursos sem necessidade de reinstalação manual.
-                </p>
-
-                {/* Countdown display */}
-                <div className="grid grid-cols-4 gap-2 text-center mb-4">
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                    <span className="text-lg font-bold font-mono text-white block tabular-nums">
-                      {daysRemaining}
-                    </span>
-                    <span className="text-[10px] text-slate-400">Dias</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                    <span className="text-lg font-bold font-mono text-white block tabular-nums">
-                      {hoursRemaining}
-                    </span>
-                    <span className="text-[10px] text-slate-400">Horas</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                    <span className="text-lg font-bold font-mono text-white block tabular-nums">
-                      {minutesRemaining}
-                    </span>
-                    <span className="text-[10px] text-slate-400">Minutos</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                    <span className="text-lg font-bold font-mono text-blue-400 block tabular-nums">
-                      {secondsRemaining}
-                    </span>
-                    <span className="text-[10px] text-slate-400">Segundos</span>
-                  </div>
-                </div>
-
+          {/* 1. CATEGORIA: CONTA */}
+          {activeCategory === 'account' && (
+            <div className="space-y-5">
+              {/* Permanent NEXORA ID */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/30 to-indigo-950/30 border border-blue-500/20">
+                <span className="text-[11px] font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wider block mb-1">
+                  NEXORA ID Permanente
+                </span>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">
-                    Próxima onda de surpresas: Novas lentes de IA e áudio imersivo
+                  <span className="text-xl font-mono font-bold tracking-wider text-slate-900 dark:text-white">
+                    {currentUser.nexoraId}
                   </span>
                   <button
-                    onClick={handleManualCheckUpdate}
-                    disabled={isCheckingUpdate}
-                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/20"
+                    type="button"
+                    onClick={handleCopyNexoraId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:border-blue-500 transition-colors cursor-pointer"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-                    <span>{isCheckingUpdate ? 'A sincronizar...' : 'Sincronizar Agora'}</span>
+                    {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedId ? 'Copiado' : 'Copiar ID'}</span>
                   </button>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Identificador criptográfico exclusivo gerado no momento do registo.
+                </p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-1">
-                  Radar de Evolução Contínua:
-                </span>
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  {lastCheckMessage}
-                </p>
+              {/* Edit Basic Info */}
+              <form onSubmit={handleSaveAccountInfo} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Nome de Apresentação
+                  </label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Nome de Utilizador (@)
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-mono focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingProfile ? 'A guardar...' : 'Guardar Alterações'}
+                </button>
+              </form>
+
+              {/* Password Change Form */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                <h5 className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  <span>Alteração de Palavra-passe Segura</span>
+                </h5>
+
+                <form onSubmit={handleChangePassword} className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Nova Palavra-passe (mínimo 6 caracteres)"
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Confirmar Nova Palavra-passe"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-1 focus:ring-blue-500"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isChangingPassword || !newPassword}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {isChangingPassword ? 'A atualizar...' : 'Atualizar Palavra-passe'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Danger Zone */}
+              <div className="pt-4 border-t border-rose-200/40 dark:border-rose-900/40 space-y-2.5">
+                <h5 className="font-bold text-xs uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Zona de Risco</span>
+                </h5>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDeactivate}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    Desativar Temporariamente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Eliminar Conta Permanentemente
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* 2. SEGURANÇA REFORÇADA SECTION */}
-          {activeSection === 'security' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">
-                  Proteção Criptográfica & Acesso
-                </h4>
-
-                <label className="flex items-center justify-between cursor-pointer">
+          {/* 2. CATEGORIA: PRIVACIDADE */}
+          {activeCategory === 'privacy' && (
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold text-slate-900 dark:text-white block">
-                      Acesso Biométrico e Passkeys FIDO2
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      Conta Privada
                     </span>
                     <span className="text-[11px] text-slate-500">
-                      Entra com impressão digital ou reconhecimento facial sem palavra-passe.
+                      Apenas utilizadores aprovados podem ver as tuas publicações e Reels.
                     </span>
                   </div>
                   <input
                     type="checkbox"
-                    checked={biometricEnabled}
-                    onChange={e => setBiometricEnabled(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded"
+                    checked={isPrivate}
+                    onChange={(e) => handleTogglePrivacy(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
                   />
-                </label>
-
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-xs font-semibold text-slate-900 dark:text-white block">
-                      Encriptação Resistente a Computação Quântica
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Chaves Kyber-1024 protegendo as tuas conversas privadas e arquivos.
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={quantumEncryption}
-                    onChange={e => setQuantumEncryption(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                </label>
+                </div>
               </div>
 
-              {/* Active Sessions List */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200">
-                    Sessões Ativas em Dispositivos ({activeSessions.length})
-                  </h4>
-                  <button
-                    onClick={handleTerminateOtherSessions}
-                    className="text-xs text-rose-600 dark:text-rose-400 font-semibold hover:underline"
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-4">
+                <h5 className="font-bold text-xs uppercase tracking-wider text-slate-500">
+                  Interações & Contacto
+                </h5>
+
+                <div className="flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-semibold block">Quem pode enviar-te mensagens</span>
+                    <span className="text-[11px] text-slate-500">Controla mensagens diretas de desconhecidos</span>
+                  </div>
+                  <select
+                    value={messagePrivacy}
+                    onChange={(e: any) => setMessagePrivacy(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
                   >
-                    Encerrar Outras Sessões
+                    <option value="everyone">Todos</option>
+                    <option value="following">Apenas Pessoas que Segues</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="font-semibold block">Quem pode comentar as tuas publicações</span>
+                    <span className="text-[11px] text-slate-500">Filtro de comentários e interação</span>
+                  </div>
+                  <select
+                    value={commentPrivacy}
+                    onChange={(e: any) => setCommentPrivacy(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+                  >
+                    <option value="everyone">Todos</option>
+                    <option value="following">Apenas Pessoas que Segues</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Device & Personal Data Permissions */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="font-bold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-blue-500" />
+                    <span>Permissões do Dispositivo & Privacidade</span>
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={handleResetPermissions}
+                    className="text-[11px] text-rose-500 hover:underline"
+                  >
+                    Repor Permissões
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  {activeSessions.map(session => (
-                    <div
-                      key={session.id}
-                      className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs"
+                <div className="space-y-2.5">
+                  {/* Photos / Media Permission */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Image className="w-4 h-4 text-blue-500" />
+                      <div>
+                        <span className="font-semibold block">Acesso a Fotografias e Ficheiros</span>
+                        <span className="text-[10px] text-slate-400">
+                          {photosPermissionGranted
+                            ? 'Permissão concedida para upload de fotos e vídeos'
+                            : 'Acesso restrito (será solicitada permissão antes de abrir a galeria)'}
+                        </span>
+                      </div>
+                    </div>
+                    {photosPermissionGranted ? (
+                      <button
+                        type="button"
+                        onClick={handleRevokePhotos}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-500 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+                      >
+                        Revogar
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                        Não autorizada
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Geolocation Permission */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <MapPin className="w-4 h-4 text-rose-500" />
+                      <div>
+                        <span className="font-semibold block">Acesso à Localização Geográfica</span>
+                        <span className="text-[10px] text-slate-400">
+                          {locationPermissionGranted
+                            ? 'Permissão concedida para identificação de cidade nas publicações'
+                            : 'Acesso restrito (será solicitada autorização antes da partilha)'}
+                        </span>
+                      </div>
+                    </div>
+                    {locationPermissionGranted ? (
+                      <button
+                        type="button"
+                        onClick={handleRevokeLocation}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-500 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+                      >
+                        Revogar
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                        Não autorizada
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Image Cache Cleaner */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <RefreshCw className="w-4 h-4 text-purple-500" />
+                      <div>
+                        <span className="font-semibold block">Cache de Imagens do Dispositivo</span>
+                        <span className="text-[10px] text-slate-400">
+                          Armazenamento local para carregamento instantâneo de fotos e avatares
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearCache}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
                     >
-                      <div className="flex items-center gap-2.5">
-                        {session.isCurrent ? (
-                          <Smartphone className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <Laptop className="w-4 h-4 text-slate-400" />
-                        )}
-                        <div>
-                          <span className="font-semibold text-slate-900 dark:text-white block">
-                            {session.device} {session.isCurrent && '(Este dispositivo)'}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {session.location} · {session.ip} · {session.lastActive}
+                      Limpar Cache
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Blocked Users */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                <h5 className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-2.5 flex items-center gap-1.5">
+                  <UserX className="w-4 h-4 text-rose-500" />
+                  <span>Utilizadores Bloqueados ({blockedUsersList.length})</span>
+                </h5>
+
+                {blockedUsersList.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhum utilizador bloqueado de momento.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedUsersList.map((bu) => (
+                      <div key={bu.id} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <img src={bu.avatar} alt={bu.name} className="w-7 h-7 rounded-full object-cover" />
+                          <span className="text-xs font-semibold">@{bu.username}</span>
+                        </div>
+                        <span className="text-[10px] text-rose-500 font-bold uppercase">Bloqueado</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. CATEGORIA: SEGURANÇA */}
+          {activeCategory === 'security' && (
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-500">
+                      Dispositivos com Sessão Iniciada ({sessions.length})
+                    </h5>
+                    <p className="text-[11px] text-slate-400">
+                      Deteção exata de hardware, modelo e sistema operativo
+                    </p>
+                  </div>
+                  {sessions.length > 1 && (
+                    <button
+                      onClick={handleTerminateOtherSessions}
+                      className="text-xs text-rose-600 dark:text-rose-400 font-semibold hover:underline cursor-pointer"
+                    >
+                      Terminar Outras Sessões
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2.5">
+                  {sessions.map((s) => {
+                    const DeviceIcon =
+                      s.deviceType === 'desktop'
+                        ? Laptop
+                        : s.deviceType === 'tablet'
+                        ? Tablet
+                        : Smartphone;
+
+                    return (
+                      <div
+                        key={s.id}
+                        className={`p-3 rounded-2xl border transition-all text-xs ${
+                          s.isCurrent
+                            ? 'bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
+                            : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+                              <DeviceIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 dark:text-white">
+                                  {s.deviceName}
+                                </span>
+                                {s.isCurrent && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    Este dispositivo (Sessão Atual)
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                                {s.os} · {s.browser} · {s.resolution}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                                Fuso horário: {s.timeZone} · {s.lastActive}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-semibold shrink-0">
+                            Ativo
                           </span>
                         </div>
                       </div>
-
-                      {session.isCurrent && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-semibold">
-                          Online
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* 3. COMPATIBILIDADE ANDROID 7+ SECTION */}
-          {activeSection === 'compatibility' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
                 <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span className="font-bold text-xs">Suporte Universal Verificado</span>
+                  <span className="font-bold text-xs">Proteção de Sessão Ativa</span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  O NEXORA HI inclui polyfills e otimização de renderização acelerada por GPU para garantir compatibilidade a 100% com **Android 7.0 (Nougat), 8, 9, 10, 11, 12, 13, 14, 15** e todos os navegadores modernos e legados.
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  A sua sessão está assinada criptograficamente através de tokens JWT emitidos pelo Firebase Authentication com transmissão segura TLS 1.3.
                 </p>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div>
-                      <span className="text-xs font-semibold text-slate-900 dark:text-white block">
-                        Modo de Poupança Extrema de Dados
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        Otimiza imagens e comprime vídeos para conexões lentas (3G/4G).
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={dataSaverMode}
-                      onChange={e => setDataSaverMode(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div>
-                      <span className="text-xs font-semibold text-slate-900 dark:text-white block">
-                        Taxa de Atualização Dinâmica (60fps / 120Hz)
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        Transições ultra suaves adaptadas ao ecrã do teu telemóvel.
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={highFrameRate}
-                      onChange={e => setHighFrameRate(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                  </label>
-                </div>
               </div>
             </div>
           )}
 
-          {/* 4. INSTALAÇÃO & APK SECTION */}
-          {activeSection === 'installation' && (
+          {/* 4. CATEGORIA: APARÊNCIA & IDIOMA */}
+          {activeCategory === 'appearance' && (
+            <div className="space-y-5">
+              {/* Theme Toggle */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                    {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs block">Tema da Aplicação</span>
+                    <span className="text-[11px] text-slate-500">
+                      {theme === 'dark' ? 'Modo Escuro Ativo' : 'Modo Claro Ativo'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:border-blue-500 transition-colors cursor-pointer"
+                >
+                  {theme === 'dark' ? 'Mudar para Claro' : 'Mudar para Escuro'}
+                </button>
+              </div>
+
+              {/* Language Selection */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                    <Globe2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs block">Idioma Global</span>
+                    <span className="text-[11px] text-slate-500">
+                      Ativo: {currentLangObj.nativeName} ({currentLangObj.name})
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onOpenLanguageSelector}
+                  className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+                >
+                  <span>Alterar Idioma</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 5. CATEGORIA: NOTIFICAÇÕES */}
+          {activeCategory === 'notifications' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-teal-950/30 to-slate-900 border border-emerald-500/30 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Download className="w-5 h-5 text-emerald-400" />
-                  <h4 className="font-bold text-sm text-white font-[var(--font-display)]">
-                    Instalar Aplicação NEXORA HI no Dispositivo
-                  </h4>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Tens acesso a todos os métodos de instalação: 1-toque direto pelo Chrome, geração de APK pelo PWABuilder ou download do pacote ZIP de código-fonte.
-                </p>
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3.5">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-xs font-semibold block">Gostos e Reações</span>
+                    <span className="text-[11px] text-slate-500">Quando alguém gostar de uma publicação ou reel</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyLikes}
+                    onChange={(e) => setNotifyLikes(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                </label>
 
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  {onOpenInstallationHub && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenInstallationHub();
-                      }}
-                      className="py-2.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 shadow-md transition-all"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Abrir Central de Instalação Completa</span>
-                    </button>
-                  )}
+                <label className="flex items-center justify-between cursor-pointer pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="text-xs font-semibold block">Comentários e Respostas</span>
+                    <span className="text-[11px] text-slate-500">Quando alguém comentar nas tuas partilhas</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyComments}
+                    onChange={(e) => setNotifyComments(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                </label>
 
-                  <a
-                    href="https://www.pwabuilder.com?url=https://ais-pre-rwuwoovdry536fzr67tzkt-292990919406.us-east1.run.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="py-2.5 px-4 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <span>Gerar APK (PWABuilder)</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-75" />
-                  </a>
-                </div>
-              </div>
+                <label className="flex items-center justify-between cursor-pointer pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="text-xs font-semibold block">Mensagens Diretas</span>
+                    <span className="text-[11px] text-slate-500">Alertas instantâneos de novas mensagens de chat</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyMessages}
+                    onChange={(e) => setNotifyMessages(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                </label>
 
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2 text-xs">
-                <span className="font-bold text-slate-900 dark:text-white block">
-                  Instalação Manual no Google Chrome:
-                </span>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Toca no menu de <strong>3 pontinhos (⋮)</strong> no canto superior do navegador e clica em <strong>"Instalar aplicação"</strong> ou <strong>"Adicionar ao ecrã principal"</strong>.
-                </p>
+                <label className="flex items-center justify-between cursor-pointer pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <span className="text-xs font-semibold block">Chamadas de Voz e Vídeo</span>
+                    <span className="text-[11px] text-slate-500">Receber notificações de chamadas em tempo real</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifyCalls}
+                    onChange={(e) => setNotifyCalls(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                </label>
               </div>
             </div>
           )}
 
-          {/* 5. NOTIFICAÇÕES SECTION */}
-          {activeSection === 'notifications' && (
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <span className="text-xs font-semibold text-slate-900 dark:text-white block">
-                    Notificações em Tempo Real
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    Receber alertas instantâneos de mensagens, clips e chamadas.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={pushNotifs}
-                  onChange={e => setPushNotifs(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-              </label>
-            </div>
-          )}
-
-        </div>
-
-        {/* Footer */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-[11px] text-slate-400 font-mono">
-            NEXORA HI v2.6-AUTONOMOUS
-          </span>
-          <button
-            onClick={() => {
-              addToast('Definições salvas com sucesso!', 'success');
-              onClose();
-            }}
-            className="px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm"
-          >
-            Concluir
-          </button>
+          {/* Modal Footer */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={logout}
+              className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+            >
+              Terminar Sessão
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm cursor-pointer"
+            >
+              Concluir
+            </button>
+          </div>
         </div>
 
       </div>

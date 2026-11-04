@@ -134,11 +134,19 @@ export const StoryViewerModal: React.FC = () => {
                 src={activeStory.author.avatar}
                 alt={activeStory.author.name}
                 referrerPolicy="no-referrer"
-                className="w-9 h-9 rounded-full object-cover border-2 border-white/60"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                className="w-9 h-9 rounded-full object-cover border-2 border-white/60 select-none no-drag protected-image"
               />
               <div>
-                <h4 className="font-bold text-xs leading-none drop-shadow">
-                  {activeStory.author.name}
+                <h4 className="font-bold text-xs leading-none drop-shadow flex items-center gap-1">
+                  <span>{activeStory.author.name}</span>
+                  {activeStory.author.isVerified && (
+                    <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white text-[8px] flex items-center justify-center font-bold">
+                      ✓
+                    </span>
+                  )}
                 </h4>
                 <div className="flex items-center gap-1.5 text-[10px] text-white/80 mt-1">
                   <span>@{activeStory.author.username}</span>
@@ -192,7 +200,10 @@ export const StoryViewerModal: React.FC = () => {
               src={activeStory.mediaUrl}
               alt="Story"
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+              className="w-full h-full object-cover select-none no-drag protected-image"
             />
           )}
 

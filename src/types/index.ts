@@ -1,10 +1,11 @@
 export interface User {
-  id: string;
-  name: string;
-  username: string;
-  email: string;
+  id: string; // Firebase Auth UID
+  nexoraId: string; // Permanent unique NEXORA ID (e.g. NX-849271)
+  name: string; // Display name
+  username: string; // Unique username (e.g. alex)
+  email?: string;
   avatar: string;
-  coverImage: string;
+  coverImage?: string;
   bio: string;
   location?: string;
   website?: string;
@@ -14,25 +15,32 @@ export interface User {
   postsCount: number;
   isVerified?: boolean;
   isPrivate?: boolean;
+  isSuspended?: boolean;
+  role?: 'user' | 'admin';
   joinedDate: string;
-  interests?: string[];
+  recoveryCode?: string;
+  recoveryCodeHash?: string;
   twoFactorEnabled?: boolean;
+  interests?: string[];
 }
 
 export type ReactionType = 'like' | 'love' | 'insight' | 'rocket' | 'laugh';
 
 export interface Comment {
   id: string;
+  postId?: string;
   author: {
     id: string;
     name: string;
     username: string;
     avatar: string;
+    nexoraId?: string;
   };
   text: string;
   createdAt: string;
   likesCount: number;
   hasLiked?: boolean;
+  replyToCommentId?: string;
   replies?: Comment[];
 }
 
@@ -62,6 +70,7 @@ export interface Post {
   tags?: string[];
   mentions?: string[];
   poll?: Poll;
+  audioBadge?: string;
   linkPreview?: {
     title: string;
     description: string;
@@ -69,16 +78,15 @@ export interface Post {
     image?: string;
     url: string;
   };
-  audioBadge?: string;
   createdAt: string;
   likesCount: number;
   hasLiked?: boolean;
   userReaction?: ReactionType;
-  reactionsSummary: Record<ReactionType, number>;
+  reactionsSummary?: Record<ReactionType, number>;
   commentsCount: number;
-  comments: Comment[];
+  comments?: Comment[];
   sharesCount: number;
-  bookmarksCount: number;
+  bookmarksCount?: number;
   isSaved?: boolean;
   isPinned?: boolean;
   audience: 'public' | 'followers' | 'close_friends';
@@ -95,23 +103,18 @@ export interface Story {
   musicTrack?: string;
   stickers?: string[];
   createdAt: string;
-  expiresInHours: number;
+  expiresAt?: number;
+  expiresInHours?: number;
   viewersCount: number;
+  viewerIds?: string[];
   hasSeen?: boolean;
-}
-
-export interface Highlight {
-  id: string;
-  title: string;
-  coverImage: string;
-  storiesCount: number;
 }
 
 export interface Clip {
   id: string;
   author: User;
-  videoUrl?: string;
-  posterUrl: string;
+  videoUrl: string;
+  posterUrl?: string;
   description: string;
   tags: string[];
   musicTrack: {
@@ -123,9 +126,11 @@ export interface Clip {
   commentsCount: number;
   comments: Comment[];
   sharesCount: number;
-  bookmarksCount: number;
-  isSaved: boolean;
-  quality: 'auto' | '1080p' | '720p' | 'eco';
+  bookmarksCount?: number;
+  viewsCount?: number;
+  isSaved?: boolean;
+  quality?: 'auto' | '1080p' | '720p' | 'eco';
+  createdAt?: string;
 }
 
 export interface Message {
@@ -147,7 +152,8 @@ export interface Message {
     emoji: string;
     userId: string;
   }[];
-  status: 'sent' | 'delivered' | 'read';
+  readBy?: string[];
+  status?: 'sent' | 'delivered' | 'read';
   createdAt: string;
 }
 
@@ -157,12 +163,26 @@ export interface Conversation {
   name?: string;
   avatar?: string;
   participants: User[];
+  participantIds?: string[];
+  creatorId?: string;
   lastMessage?: Message;
-  unreadCount: number;
+  unreadCount?: number;
   isPinned?: boolean;
   isMuted?: boolean;
-  isArchived?: boolean;
+  updatedAt?: string;
   typingUser?: string;
+}
+
+export interface FollowRequest {
+  id: string;
+  targetUserId: string;
+  requesterUserId: string;
+  requesterUsername: string;
+  requesterDisplayName: string;
+  requesterAvatar: string;
+  requesterNexoraId: string;
+  createdAt: string;
+  status: 'pending' | 'accepted' | 'rejected';
 }
 
 export interface Community {
@@ -195,9 +215,11 @@ export interface JobOpportunity {
 
 export interface CallSession {
   isOpen: boolean;
+  callId?: string;
   targetUser: User | null;
   isVideo: boolean;
-  status: 'connecting' | 'connected' | 'ended';
+  isIncoming?: boolean;
+  status: 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended' | 'rejected';
   durationSeconds: number;
   isMuted: boolean;
   isCameraOff: boolean;
@@ -221,7 +243,7 @@ export interface UserActivity {
   type: ActivityType;
   title: string;
   description: string;
-  timestamp: string; // ISO String
+  timestamp: string;
   metadata?: {
     tab?: string;
     postId?: string;
@@ -230,4 +252,36 @@ export interface UserActivity {
     details?: string;
     provider?: string;
   };
+}
+
+export interface ReportItem {
+  id: string;
+  reporterId: string;
+  reporterUsername?: string;
+  targetType: 'user' | 'post' | 'comment' | 'message';
+  targetId: string;
+  targetAuthorName?: string;
+  reason: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  type: 'like' | 'comment' | 'follow' | 'follow_request' | 'message' | 'call' | 'mention';
+  title?: string;
+  message?: string;
+  senderId?: string;
+  senderName?: string;
+  senderUsername?: string;
+  senderAvatar?: string;
+  actorId?: string;
+  actorName?: string;
+  actorUsername?: string;
+  actorAvatar?: string;
+  targetId?: string;
+  previewContent?: string;
+  createdAt: string;
+  isRead: boolean;
 }

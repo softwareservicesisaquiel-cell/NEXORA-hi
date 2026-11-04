@@ -31,6 +31,7 @@ export const ExploreView: React.FC = () => {
     toggleFollowUser,
     openUserProfile,
     setActiveTab,
+    t,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,26 +91,28 @@ export const ExploreView: React.FC = () => {
 
   const filteredUsers = allUsers.filter(u => {
     if (currentUser && u.id === currentUser.id) return false;
+    const q = searchQuery.toLowerCase().trim();
     return (
-      searchQuery === '' ||
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.bio.toLowerCase().includes(searchQuery.toLowerCase())
+      q === '' ||
+      u.name.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      (u.nexoraId && u.nexoraId.toLowerCase().includes(q)) ||
+      (u.bio && u.bio.toLowerCase().includes(q))
     );
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 space-y-6">
       
-      {/* Search Header Banner */}
-      <div className="relative rounded-3xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/40 border border-blue-500/20 p-6 sm:p-10 shadow-lg overflow-hidden">
+      {/* Search Header */}
+      <div className="relative rounded-3xl bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-purple-900/30 border border-blue-500/20 p-5 sm:p-8 shadow-sm overflow-hidden">
         <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-2">
             <Compass className="w-3.5 h-3.5" />
-            <span>DESCOBERTA INTELIGENTE NEXORA</span>
+            <span>DESCOBERTA NEXORA</span>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight font-[var(--font-display)] text-slate-900 dark:text-white mb-3">
-            Explora o pulso da inovação
+          <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight font-[var(--font-display)] text-slate-900 dark:text-white mb-2">
+            Explora o pulso da rede
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
             Conteúdo curado em tempo real, tópicos de vanguarda e mentes brilhantes alinhadas com os teus interesses de pesquisa.
@@ -121,8 +124,8 @@ export const ExploreView: React.FC = () => {
             <input
               type="text"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar publicações, @criadores, clips ou tópicos #..."
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('explore.searchPlaceholder')}
               className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 shadow-md text-slate-900 dark:text-white"
             />
             {searchQuery && (
@@ -130,7 +133,7 @@ export const ExploreView: React.FC = () => {
                 onClick={() => setSearchQuery('')}
                 className="absolute right-4 text-xs text-slate-400 hover:text-slate-600"
               >
-                Limpar
+                {t('explore.clear')}
               </button>
             )}
           </div>
@@ -259,7 +262,10 @@ export const ExploreView: React.FC = () => {
                         src={user.avatar}
                         alt={user.name}
                         referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-slate-700 group-hover:ring-2 group-hover:ring-purple-500/40 transition-all"
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onDragStart={(e) => e.preventDefault()}
+                        className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-slate-700 group-hover:ring-2 group-hover:ring-purple-500/40 transition-all select-none no-drag protected-image"
                       />
                       <div>
                         <div className="flex items-center gap-1 font-bold text-sm text-slate-900 dark:text-white group-hover:text-purple-600 transition-colors">
@@ -270,7 +276,12 @@ export const ExploreView: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-slate-500">@{user.username}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-xs text-slate-500 font-mono">@{user.username}</span>
+                          <span className="text-[10px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.2 rounded font-mono font-semibold">
+                            {user.nexoraId}
+                          </span>
+                        </div>
                       </div>
                     </button>
 
@@ -330,7 +341,10 @@ export const ExploreView: React.FC = () => {
                 src={clip.posterUrl}
                 alt={clip.description}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 select-none no-drag protected-image"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3 sm:p-4">
                 <span className="text-[10px] text-white/80 font-medium">@{clip.author.username}</span>
@@ -396,7 +410,10 @@ export const ExploreView: React.FC = () => {
                       src={comm.iconImage}
                       alt={comm.name}
                       referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      onDragStart={(e) => e.preventDefault()}
+                      className="w-12 h-12 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 select-none no-drag protected-image"
                     />
                     <div>
                       <h4 className="font-bold text-sm text-slate-900 dark:text-white">

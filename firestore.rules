@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. User Profiles & Settings
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Allow user to edit their profile, admin to manage, or authenticated users to update counter increments (followers/posts count)
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        request.auth.token.admin == true ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount', 'postsCount', 'isSuspended'])
+      );
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || request.auth.token.admin == true);
+    }
+
+    // 2. Fast Lookup Indexes for Username & NEXORA ID
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    
+    match /nexoraIds/{nexoraId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // 3. Posts & Publications
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || request.auth.token.admin == true);
+    }
+
+    // 4. Ephemeral Stories (24h)
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || request.auth.token.admin == true);
+    }
+
+    // 5. Reels / Clips
+    match /reels/{reelId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || request.auth.token.admin == true);
+    }
+
+    // 6. Likes & Saved Posts
+    match /likes/{likeId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /savedPosts/{saveId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 7. Post Comments
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || request.auth.token.admin == true);
+    }
+
+    // 8. Follows & Follow Requests
+    match /followers/{followId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /followRequests/{requestId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 9. Conversations & Messages
+    match /conversations/{conversationId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /messages/{messageId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 10. WebRTC Audio & Video Calls
+    match /calls/{callId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 11. Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 12. Safety, Moderation & Reports
+    match /reports/{reportId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 13. Blocked Users
+    match /blockedUsers/{blockId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Post, ReactionType } from '../types';
 import { useApp } from '../context/AppContext';
+import { ShareModal } from './ShareModal';
+import { OptimizedAvatar } from './OptimizedAvatar';
+import { OptimizedImage } from './OptimizedImage';
 import {
   Heart,
   MessageCircle,
@@ -38,6 +41,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     deletePost,
     openUserProfile,
     addToast,
+    t,
   } = useApp();
 
   const [showReactionsBar, setShowReactionsBar] = useState(false);
@@ -47,6 +51,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const isAuthor = currentUser?.id === post.author.id;
 
@@ -62,15 +67,30 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     setReplyingToId(null);
   };
 
-  const handleCopyLink = () => {
-    setCopiedLink(true);
-    addToast('Ligação da publicação copiada para a área de transferência!', 'success');
-    setTimeout(() => setCopiedLink(false), 2000);
+  const handleCopyLink = async () => {
+    const postUrl = `${window.location.origin}/#post-${post.id}`;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(postUrl);
+      } else {
+        const input = document.createElement('input');
+        input.value = postUrl;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopiedLink(true);
+      addToast('Ligação da publicação copiada para a área de transferência!', 'success');
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      addToast('Ligação copiada!', 'success');
+    }
     setShowMenu(false);
   };
 
   const handleShare = () => {
-    addToast('Publicação partilhada no teu perfil Nexora!', 'success');
+    setShowShareModal(true);
   };
 
   const reactionEmojis: { type: ReactionType; icon: React.ComponentType<{ className?: string }>; label: string; color: string }[] = [
@@ -108,11 +128,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             onClick={() => openUserProfile(post.author)}
             className="relative group shrink-0"
           >
-            <img
+            <OptimizedAvatar
               src={post.author.avatar}
               alt={post.author.name}
-              referrerPolicy="no-referrer"
-              className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-slate-700 group-hover:ring-2 group-hover:ring-blue-500/40 transition-all"
+              size="md"
+              className="group-hover:ring-2 group-hover:ring-blue-500/40 transition-all"
             />
           </button>
 
@@ -314,16 +334,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     src={currentMedia}
                     controls
                     playsInline
-                    className="w-full h-full object-contain max-h-96"
+                    controlsList="nodownload"
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="w-full h-full object-contain max-h-96 select-none no-drag protected-image"
                   />
                 );
               }
               return (
-                <img
+                <OptimizedImage
                   src={currentMedia}
                   alt="Publicação mídia"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-contain"
+                  objectFit="contain"
+                  priority={activeMediaIndex === 0}
+                  className="w-full h-full max-h-96"
                 />
               );
             })()}
@@ -344,7 +367,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     idx === activeMediaIndex ? 'border-blue-500 scale-105' : 'border-transparent opacity-60'
                   }`}
                 >
-                  <img src={url} alt="Miniatura" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  <OptimizedImage src={url} alt="Miniatura" width={48} height={48} className="w-full h-full" />
                 </button>
               ))}
             </div>
@@ -362,11 +385,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         >
           {post.linkPreview.image && (
             <div className="aspect-[2/1] max-h-48 w-full overflow-hidden">
-              <img
+              <OptimizedImage
                 src={post.linkPreview.image}
                 alt={post.linkPreview.title}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                height={192}
+                className="w-full h-full group-hover:scale-102 transition-transform duration-300"
               />
             </div>
           )}
@@ -427,7 +450,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             ) : (
               <Heart className="w-4 h-4" />
             )}
-            <span>{currentReactionObj ? currentReactionObj.label : 'Gostar'}</span>
+            <span>{currentReactionObj ? currentReactionObj.label : t('feed.like')}</span>
           </button>
 
           {/* Floating Emoji Reactions Bar */}
@@ -456,7 +479,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[44px]"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Comentar</span>
+          <span>{t('feed.comment')}</span>
         </button>
 
         {/* Share Button */}
@@ -465,7 +488,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[44px]"
         >
           <Share2 className="w-4 h-4" />
-          <span>Partilhar</span>
+          <span>{t('feed.share')}</span>
         </button>
 
         {/* Bookmark Button */}
@@ -476,7 +499,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40'
               : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
-          title={post.isSaved ? 'Remover dos Guardados' : 'Guardar'}
+          title={post.isSaved ? t('feed.saved') : t('feed.save')}
         >
           <Bookmark className={`w-4 h-4 ${post.isSaved ? 'fill-current' : ''}`} />
         </button>
@@ -532,11 +555,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               {post.comments.map(c => (
                 <div key={c.id} className="text-xs">
                   <div className="flex items-start gap-2.5">
-                    <img
+                    <OptimizedAvatar
                       src={c.author.avatar}
                       alt={c.author.name}
-                      referrerPolicy="no-referrer"
-                      className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5"
+                      size="xs"
+                      className="shrink-0 mt-0.5"
                     />
                     <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2.5 border border-slate-100 dark:border-slate-800">
                       <div className="flex items-center justify-between mb-1">
@@ -566,11 +589,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     <div className="ml-9 mt-2 space-y-2 border-l-2 border-slate-200 dark:border-slate-800 pl-3">
                       {c.replies.map(reply => (
                         <div key={reply.id} className="flex items-start gap-2 text-xs">
-                          <img
+                          <OptimizedAvatar
                             src={reply.author.avatar}
                             alt={reply.author.name}
-                            referrerPolicy="no-referrer"
-                            className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5"
+                            size="xs"
+                            className="shrink-0 mt-0.5"
                           />
                           <div className="flex-1 bg-slate-100/70 dark:bg-slate-800/80 rounded-lg p-2">
                             <div className="flex items-center justify-between mb-0.5">
@@ -598,6 +621,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
         </div>
       )}
+
+      {/* Universal Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        title={`Publicação de ${post.author.name} (@${post.author.username})`}
+        text={post.content}
+        url={`/?post=${post.id}`}
+        itemType="post"
+        itemId={post.id}
+        authorName={post.author.name}
+        authorAvatar={post.author.avatar}
+        thumbnail={post.mediaUrls?.[0]}
+      />
 
     </article>
   );

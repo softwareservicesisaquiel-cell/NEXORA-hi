@@ -1,24 +1,26 @@
 {
   "id": "/",
-  "name": "NEXORA HI — Rede Social de Nova Geração",
-  "short_name": "NEXORA HI",
-  "description": "Uma nova forma de te conectares. Publicações, clips verticais, stories interativos, mensagens encriptadas e comunidades globais.",
-  "start_url": "/",
+  "name": "NEXORA — Rede Social",
+  "short_name": "NEXORA",
+  "description": "Rede social moderna com publicações, reels em tela cheia, stories dinâmicos, mensagens privadas encriptadas e comunidades globais.",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "lang": "pt",
   "dir": "ltr",
   "display": "standalone",
   "display_override": [
-    "window-controls-overlay",
+    "fullscreen",
     "standalone",
+    "window-controls-overlay",
     "minimal-ui"
   ],
   "orientation": "portrait-primary",
-  "background_color": "#030712",
-  "theme_color": "#2563eb",
+  "background_color": "#0f131c",
+  "theme_color": "#0f131c",
   "categories": [
     "social",
     "entertainment",
+    "lifestyle",
     "news"
   ],
   "icons": [
@@ -53,21 +55,21 @@
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "NEXORA Clips & Feed no Telemóvel"
+      "label": "NEXORA Reels & Feed no Telemóvel"
     },
     {
       "src": "/screenshot-desktop.png",
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "NEXORA Ecossistema Social"
+      "label": "NEXORA Ecossistema Social Completo"
     }
   ],
   "shortcuts": [
     {
       "name": "Feed Principal",
       "short_name": "Feed",
-      "description": "Aceder às publicações e debates mais recentes",
+      "description": "Aceder às publicações e novidades mais recentes",
       "url": "/?tab=feed",
       "icons": [
         {
@@ -77,9 +79,9 @@
       ]
     },
     {
-      "name": "NEXORA Clips",
-      "short_name": "Clips",
-      "description": "Ver vídeos curtos verticais",
+      "name": "NEXORA Reels",
+      "short_name": "Reels",
+      "description": "Ver vídeos curtos verticais em ecrã inteiro",
       "url": "/?tab=clips",
       "icons": [
         {
@@ -91,7 +93,7 @@
     {
       "name": "Mensagens Diretas",
       "short_name": "Chat",
-      "description": "Conversas privadas encriptadas",
+      "description": "Conversas privadas protegidas",
       "url": "/?tab=messages",
       "icons": [
         {
@@ -101,9 +103,9 @@
       ]
     },
     {
-      "name": "Explorar Tópicos",
+      "name": "Explorar Conteúdo",
       "short_name": "Explorar",
-      "description": "Assuntos do momento e criadores",
+      "description": "Assuntos do momento, pesquisa e criadores em alta",
       "url": "/?tab=explore",
       "icons": [
         {
@@ -114,8 +116,12 @@
     }
   ],
   "launch_handler": {
-    "client_mode": "auto"
+    "client_mode": [
+      "focus-existing",
+      "auto"
+    ]
   },
+  "handle_links": "preferred",
   "share_target": {
     "action": "/?action=share",
     "method": "GET",

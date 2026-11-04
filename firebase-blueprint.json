@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User profile and authentication identity",
+      "type": "object",
+      "properties": {
+        "nexoraId": { "type": "string", "description": "Unique permanent ID (e.g. NX-849271)" },
+        "username": { "type": "string", "description": "Unique username" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "bio": { "type": "string", "description": "User biography" },
+        "isPrivate": { "type": "boolean", "description": "Account privacy setting" },
+        "isSuspended": { "type": "boolean", "description": "Moderator suspension status" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User role" },
+        "followersCount": { "type": "number" },
+        "followingCount": { "type": "number" },
+        "postsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "recoveryCodeHash": { "type": "string", "description": "SHA-256 hash of account recovery code" }
+      },
+      "required": ["nexoraId", "username", "displayName", "createdAt"]
+    },
+    "usernames": {
+      "title": "UsernameRegistry",
+      "description": "Fast uniqueness index for usernames",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "nexoraId": { "type": "string" }
+      },
+      "required": ["uid", "nexoraId"]
+    },
+    "nexoraIds": {
+      "title": "NexoraIdRegistry",
+      "description": "Fast uniqueness index for NX- IDs",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" }
+      },
+      "required": ["uid", "username"]
+    },
+    "posts": {
+      "title": "Post",
+      "description": "Feed publication",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorNexoraId": { "type": "string" },
+        "content": { "type": "string" },
+        "mediaUrls": { "type": "array", "items": { "type": "string" } },
+        "mediaType": { "type": "string", "enum": ["none", "image", "video", "album"] },
+        "likesCount": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "sharesCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["authorId", "content", "createdAt"]
+    },
+    "stories": {
+      "title": "Story",
+      "description": "24-hour expiring story",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["image", "video", "text"] },
+        "textContent": { "type": "string" },
+        "textBackgroundGradient": { "type": "string" },
+        "caption": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "number" },
+        "viewerIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["authorId", "mediaType", "createdAt", "expiresAt"]
+    },
+    "reels": {
+      "title": "Reel",
+      "description": "Short vertical video clip",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "musicTitle": { "type": "string" },
+        "musicArtist": { "type": "string" },
+        "likesCount": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["authorId", "videoUrl", "createdAt"]
+    },
+    "conversations": {
+      "title": "Conversation",
+      "description": "Direct message or group chat channel",
+      "type": "object",
+      "properties": {
+        "isGroup": { "type": "boolean" },
+        "groupName": { "type": "string" },
+        "groupAvatar": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "participantIds": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["participantIds", "updatedAt"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "Message within a conversation",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "reactions": { "type": "object" },
+        "readBy": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["conversationId", "senderId", "createdAt"]
+    },
+    "reports": {
+      "title": "Report",
+      "description": "Moderation report",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["reporterId", "targetType", "targetId", "reason", "createdAt"]
+    }
+  }
+}

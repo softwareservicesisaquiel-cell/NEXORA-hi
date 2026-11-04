@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { MusicSelectorModal } from './MusicSelectorModal';
+import { PermissionModal } from './PermissionModal';
+import { hasPermission, PermissionType } from '../utils/permissionManager';
 import {
   X,
   Image as ImageIcon,
@@ -18,6 +21,11 @@ import {
   Play,
   Palette,
   Check,
+  Music2,
+  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 
 interface CreatePostModalProps {
@@ -25,6 +33,16 @@ interface CreatePostModalProps {
   onClose: () => void;
   defaultTab?: 'text' | 'photo' | 'video' | 'moment';
 }
+
+export const FILTER_PRESETS = [
+  { id: 'none', label: 'Normal', css: 'none' },
+  { id: 'vivid', label: 'Vívido', css: 'saturate(1.4) contrast(1.1)' },
+  { id: 'cinematic', label: 'Cinemático', css: 'contrast(1.15) brightness(0.95) saturate(1.1) sepia(0.15)' },
+  { id: 'vintage', label: 'Vintage', css: 'sepia(0.4) contrast(0.9) brightness(1.05) saturate(1.2)' },
+  { id: 'bw', label: 'P&B', css: 'grayscale(1) contrast(1.2)' },
+  { id: 'warm', label: 'Quente', css: 'sepia(0.25) saturate(1.25) brightness(1.02)' },
+  { id: 'cool', label: 'Frio', css: 'hue-rotate(180deg) saturate(0.9) brightness(1.02)' },
+];
 
 const GRADIENT_PRESETS = [
   { id: 'grad_none', label: 'Padrão', value: '' },
@@ -72,7 +90,91 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
 
+  // Music & Media Filters States
+  const [showMusicModal, setShowMusicModal] = useState(false);
+  const [attachedMusic, setAttachedMusic] = useState<{ title: string; artist: string } | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState('none');
+  const [showFilterSliders, setShowFilterSliders] = useState(false);
+  const [brightness, setBrightness] = useState(100);
+  const [contrast, setContrast] = useState(100);
+  const [saturation, setSaturation] = useState(100);
+
+  // Permission Modal State
+  const [pendingPermissionType, setPendingPermissionType] = useState<PermissionType | null>(null);
+  const [onPermissionGranted, setOnPermissionGranted] = useState<(() => void) | null>(null);
+
+  const photoFileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoFileInputRef = useRef<HTMLInputElement | null>(null);
+
   if (!isOpen || !currentUser) return null;
+
+  const handleRequestPhotoUpload = () => {
+    if (hasPermission('photos')) {
+      photoFileInputRef.current?.click();
+    } else {
+      setPendingPermissionType('photos');
+      setOnPermissionGranted(() => () => {
+        setTimeout(() => photoFileInputRef.current?.click(), 100);
+      });
+    }
+  };
+
+  const handleRequestVideoUpload = () => {
+    if (hasPermission('photos')) {
+      videoFileInputRef.current?.click();
+    } else {
+      setPendingPermissionType('photos');
+      setOnPermissionGranted(() => () => {
+        setTimeout(() => videoFileInputRef.current?.click(), 100);
+      });
+    }
+  };
+
+  const handleRequestLocation = () => {
+    if (hasPermission('location')) {
+      setShowLocationInput(!showLocationInput);
+    } else {
+      setPendingPermissionType('location');
+      setOnPermissionGranted(() => () => {
+        setShowLocationInput(true);
+      });
+    }
+  };
+
+  const getMediaFilterStyle = () => {
+    const presetCss = FILTER_PRESETS.find(f => f.id === selectedFilter)?.css || 'none';
+    const custom = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    return presetCss === 'none' ? custom : `${presetCss} ${custom}`;
+  };
+
+  const resetFilterAdjustments = () => {
+    setSelectedFilter('none');
+    setBrightness(100);
+    setContrast(100);
+    setSaturation(100);
+  };
+
+  const handleMoveMediaLeft = (index: number) => {
+    if (index === 0) return;
+    setMediaUrls((prev) => {
+      const next = [...prev];
+      const temp = next[index - 1];
+      next[index - 1] = next[index];
+      next[index] = temp;
+      return next;
+    });
+  };
+
+  const handleMoveMediaRight = (index: number) => {
+    if (index === mediaUrls.length - 1) return;
+    setMediaUrls((prev) => {
+      const next = [...prev];
+      const temp = next[index + 1];
+      next[index + 1] = next[index];
+      next[index] = temp;
+      return next;
+    });
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -168,6 +270,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
       poll: pollData,
       audience,
       location: location.trim() || undefined,
+      audioBadge: attachedMusic ? `${attachedMusic.title} · ${attachedMusic.artist}` : undefined,
     });
 
     // Reset state
@@ -180,6 +283,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setPollOptions(['', '']);
     setMediaUrls([]);
     setVideoUrl('');
+    setAttachedMusic(null);
+    resetFilterAdjustments();
     onClose();
   };
 
@@ -382,6 +487,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             <div className="space-y-3">
               <div className="p-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 text-center">
                 <input
+                  ref={photoFileInputRef}
                   type="file"
                   id="photo-upload-input"
                   multiple
@@ -389,9 +495,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   onChange={handleFileUpload}
                   className="hidden"
                 />
-                <label
-                  htmlFor="photo-upload-input"
-                  className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                <button
+                  type="button"
+                  onClick={handleRequestPhotoUpload}
+                  className="w-full cursor-pointer flex flex-col items-center justify-center gap-1.5 focus:outline-none"
                 >
                   <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <Upload className="w-5 h-5" />
@@ -400,9 +507,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                     Carregar Fotos do Dispositivo
                   </span>
                   <span className="text-[10px] text-slate-400">
-                    JPG, PNG, WebP (Seleciona 1 ou várias para criar um Álbum)
+                    JPG, PNG, WebP (Pede autorização para aceder à galeria)
                   </span>
-                </label>
+                </button>
               </div>
 
               {/* Sample Photo Presets */}
@@ -425,21 +532,62 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </button>
               </div>
 
-              {/* Photos Preview Grid */}
+              {/* Photos Preview Grid with Multi-Photo Reordering */}
               {mediaUrls.length > 0 && (
-                <div className="grid grid-cols-3 gap-2.5 pt-2">
-                  {mediaUrls.map((url, i) => (
-                    <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 group">
-                      <img src={url} alt={`Pré-visualização ${i}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMedia(i)}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white hover:bg-rose-600 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span className="font-semibold">Fotos selecionadas ({mediaUrls.length})</span>
+                    <span>Usa as setas para reorganizar a ordem do álbum</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {mediaUrls.map((url, i) => (
+                      <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 group bg-slate-950">
+                        <img
+                          src={url}
+                          alt={`Foto ${i + 1}`}
+                          style={{ filter: getMediaFilterStyle() }}
+                          className="w-full h-full object-cover transition-all duration-200"
+                        />
+                        
+                        {/* Position indicator */}
+                        <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-mono">
+                          {i + 1}
+                        </div>
+
+                        {/* Reorder Buttons & Delete */}
+                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                          {i > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleMoveMediaLeft(i)}
+                              title="Mover para a esquerda"
+                              className="p-1 rounded-full bg-black/60 text-white hover:bg-blue-600 transition-colors"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                          )}
+                          {i < mediaUrls.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleMoveMediaRight(i)}
+                              title="Mover para a direita"
+                              className="p-1 rounded-full bg-black/60 text-white hover:bg-blue-600 transition-colors"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMedia(i)}
+                            title="Remover foto"
+                            className="p-1 rounded-full bg-black/60 text-white hover:bg-rose-600 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -450,15 +598,17 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             <div className="space-y-3">
               <div className="p-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 text-center">
                 <input
+                  ref={videoFileInputRef}
                   type="file"
                   id="video-upload-input"
                   accept="video/*"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
-                <label
-                  htmlFor="video-upload-input"
-                  className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                <button
+                  type="button"
+                  onClick={handleRequestVideoUpload}
+                  className="w-full cursor-pointer flex flex-col items-center justify-center gap-1.5 focus:outline-none"
                 >
                   <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                     <Film className="w-5 h-5" />
@@ -467,9 +617,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                     Carregar Vídeo do Dispositivo
                   </span>
                   <span className="text-[10px] text-slate-400">
-                    MP4, WebM, MOV em Alta Definição
+                    MP4, WebM, MOV (Pede autorização para aceder à galeria)
                   </span>
-                </label>
+                </button>
               </div>
 
               {/* Sample Video Presets */}
@@ -484,13 +634,14 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </button>
               </div>
 
-              {/* Video Player Preview */}
+              {/* Video Player Preview with Filter */}
               {videoUrl && (
                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black aspect-video">
                   <video
                     src={videoUrl}
                     controls
-                    className="w-full h-full object-contain"
+                    style={{ filter: getMediaFilterStyle() }}
+                    className="w-full h-full object-contain transition-all duration-200"
                   />
                   <button
                     type="button"
@@ -499,6 +650,111 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   >
                     <X className="w-4 h-4" />
                   </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MEDIA FILTERS & VISUAL ADJUSTMENTS (Available for Photos & Videos) */}
+          {(mediaUrls.length > 0 || videoUrl) && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <Palette className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Filtros Profissionais de Imagem</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFilterSliders(!showFilterSliders)}
+                    className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg transition-colors ${
+                      showFilterSliders
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>Ajustes Finos</span>
+                  </button>
+                  {(selectedFilter !== 'none' || brightness !== 100 || contrast !== 100 || saturation !== 100) && (
+                    <button
+                      type="button"
+                      onClick={resetFilterAdjustments}
+                      className="text-[11px] text-rose-500 hover:underline flex items-center gap-0.5"
+                      title="Repor filtros originais"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Repor</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Filter Presets Badges */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                {FILTER_PRESETS.map((filter) => (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setSelectedFilter(filter.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                      selectedFilter === filter.id
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-purple-400'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Fine-Tuning Slider Controls */}
+              {showFilterSliders && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Brilho</span>
+                      <span className="font-mono">{brightness}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="50"
+                      max="150"
+                      value={brightness}
+                      onChange={(e) => setBrightness(Number(e.target.value))}
+                      className="w-full accent-purple-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Contraste</span>
+                      <span className="font-mono">{contrast}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="50"
+                      max="150"
+                      value={contrast}
+                      onChange={(e) => setContrast(Number(e.target.value))}
+                      className="w-full accent-purple-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Saturação</span>
+                      <span className="font-mono">{saturation}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="200"
+                      value={saturation}
+                      onChange={(e) => setSaturation(Number(e.target.value))}
+                      className="w-full accent-purple-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -596,9 +852,40 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             </div>
           )}
 
+          {/* Attached Music Badge if selected */}
+          {attachedMusic && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <Music2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 animate-pulse" />
+                <span className="font-semibold text-purple-900 dark:text-purple-200 truncate">
+                  {attachedMusic.title} · {attachedMusic.artist}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachedMusic(null)}
+                className="p-1 text-slate-400 hover:text-rose-500 rounded-lg"
+                title="Remover música"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Action Tools & Add-ons Footer */}
           <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowMusicModal(true)}
+                className={`p-2 rounded-xl text-slate-500 hover:text-purple-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
+                  attachedMusic ? 'text-purple-600 bg-purple-50 dark:bg-purple-950/50' : ''
+                }`}
+                title="Adicionar Música"
+              >
+                <Music2 className="w-4 h-4" />
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowPollCreator(!showPollCreator)}
@@ -612,7 +899,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setShowLocationInput(!showLocationInput)}
+                onClick={handleRequestLocation}
                 className={`p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
                   showLocationInput ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/50' : ''
                 }`}
@@ -640,6 +927,37 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           </div>
 
         </form>
+
+        {/* Music Selector Modal */}
+        <MusicSelectorModal
+          isOpen={showMusicModal}
+          onClose={() => setShowMusicModal(false)}
+          onSelectTrack={(track) => {
+            if (track.title) {
+              setAttachedMusic({ title: track.title, artist: track.artist });
+              addToast(`Música "${track.title}" adicionada à publicação!`, 'success');
+            } else {
+              setAttachedMusic(null);
+            }
+          }}
+          selectedTrackTitle={attachedMusic?.title}
+        />
+
+        {/* Permission Consent Modal */}
+        <PermissionModal
+          isOpen={pendingPermissionType !== null}
+          permissionType={pendingPermissionType || 'photos'}
+          onClose={() => {
+            setPendingPermissionType(null);
+            setOnPermissionGranted(null);
+          }}
+          onGranted={() => {
+            const callback = onPermissionGranted;
+            setPendingPermissionType(null);
+            setOnPermissionGranted(null);
+            if (callback) callback();
+          }}
+        />
 
       </div>
     </div>
